@@ -1,3 +1,4 @@
+/* eslint-disable no-proto */
 
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable max-len */
@@ -328,16 +329,24 @@ class PuppeteerBot2a {
    * @param {args<Array<Object>>} [{
    * @memberOf PuppeteerBot2a
    */
+
+  /**
+   * @description Disguises page to evade bot detection mechanisms by using advanced features of `puppeteeer` and `user-agents` to generate unique profiles per execution.
+   *
+   * @static
+   * @param {puppeteer.Page} page
+   * @param {browserContext} browserContext
+   * @param {args<Array<Object>>} [{
+   * @memberOf PuppeteerBot2a
+   */
   static async disguisePage(page, browserContext, {
     browserUniqueID = uuid.v4(),
-    // eslint-disable-next-line no-shadow
     logger,
     minWidth = 1280,
     minHeight = 1024,
     disguiseFlags = [],
     emulateFlag = 'desktop',
     geolocation,
-    isVisibleStr = isVisible.toString(),
   } = {}) {
     const fingerprint = getBrowserfingerprint(browserUniqueID, emulateFlag);
     // for monitoring detects
@@ -353,7 +362,7 @@ class PuppeteerBot2a {
 
     const LOG_OVERRIDE = true;
     if (LOG_OVERRIDE) {
-      await page.evaluateOnNewDocument(detectFingerprinting);
+      // await page.evaluateOnNewDocument(detectFingerprinting);
       await page.on('console', (msg) => {
         if (msg && msg.text) {
           if (typeof msg.text === 'function') {
@@ -405,7 +414,7 @@ class PuppeteerBot2a {
               && typeof this[name].stop === 'function'
               && typeof this[name].hps === 'function'
             ) {
-              // eslint-disable-next-line no-console
+              // eslint-disable-next-line no-
               this.logger.verbose('[+] Mineralt miner found, stopping...');
               this[name].stop();
               this[name] = null;
@@ -417,8 +426,10 @@ class PuppeteerBot2a {
       }, 2000);
     });
 
-
     await page.evaluateOnNewDocument(async (fingerprint, LO, D, flags) => {
+      // TODO: [BAC-12] Support dynamic disguise flags in new Set(F)
+      let F = new Set(flags);
+
       const logOverride = (key, value) => {
         if (!LO) return value;
         // eslint-disable-next-line no-console
@@ -624,6 +635,48 @@ class PuppeteerBot2a {
           };
         });
 
+        function hookPrototypeMethods(prefix, object) {
+          // TODO: also hook getters
+          if (!object) return;
+          const originals = {};
+          const prototype = Object.getPrototypeOf(object);
+          Object
+            .getOwnPropertyNames(prototype)
+            .filter((n) => {
+              try {
+                return typeof prototype[n] === 'function';
+              } catch (error) {
+                return false;
+              }
+            })
+            .forEach((n) => {
+              originals[n] = prototype[n];
+              // eslint-disable-next-line func-names
+              prototype[n] = function fn(...args) {
+                if (prefix === '2d' && (n === 'strokeText' || n === 'fillText')) {
+                  const temp = Array.from(args);
+                  temp[0] = fingerprint.BUID;
+                  temp[1] = Math.max(0, temp[1] - 2);
+                  temp[2] = Math.max(0, temp[2] - 2);
+                  originals[n].call(this, ...temp);
+                }
+
+                const result = originals[n].call(this, ...args);
+                if (LO) {
+                  let jsonResult;
+                  try {
+                    jsonResult = JSON.stringify(result);
+                    // eslint-disable-next-line no-empty
+                  } catch (e) {}
+                  // eslint-disable-next-line no-console
+                  console.log('function called', prefix, n, JSON.stringify(args), 'result:', result, jsonResult, `${result}`);
+                }
+                return result;
+              };
+            });
+        }
+
+
       const gls = [];
       try {
         gls.push(document.createElement('canvas').getContext('webgl'));
@@ -667,7 +720,6 @@ class PuppeteerBot2a {
 
     await page.evaluateOnNewDocument(() => {
       const originalQuery = window.navigator.permissions.query;
-      // eslint-disable-next-line no-undef
       window.navigator.permissions.__proto__.query = parameters => (parameters.name === 'notifications'
         ? Promise.resolve({ state: Notification.permission })
         : originalQuery(parameters));
@@ -696,19 +748,8 @@ class PuppeteerBot2a {
       Function.prototype.toString = functionToString;
     });
 
+    // must to hook getters
     await page.goto('about:blank');
-
-
-    // for debug
-    const evalResult = await page.evaluate(() => new Promise((resolve) => {
-      setTimeout(() => {
-        // eslint-disable-next-line no-undef
-        resolve(navigator.monitorFingerprinting);
-      }, 2000);
-    }));
-
-    console.log(evalResult);
-
 
     // eslint-disable-next-line no-undef
     const UA = await page.evaluate(() => window.navigator.userAgent);
@@ -726,13 +767,14 @@ class PuppeteerBot2a {
       await page.setGeolocation({
         latitude: geolocation.latitude,
         longitude: geolocation.longitude,
+        accuracy: 100,
       });
     }
 
 
     await page.setBypassCSP(true);
     await page.setViewport(DIMENSION);
-    await page.setDefaultTimeout(10000);
+    await page.setDefaultTimeout(25000);
   }
 
   /* eslint-disable */
@@ -804,8 +846,7 @@ class PuppeteerBot2a {
         body: buffer.toString('base64'),
       })) || {}).text || '';
     } catch (error) {
-      this.logger.error
-('failed-resolve-captcha', await this.dump({
+      this.logger.error('failed-resolve-captcha', await this.dump({
         error,
         buffer: buffer.toString('base64'),
       }));
@@ -853,8 +894,7 @@ class PuppeteerBot2a {
         });
       }
     } catch (error) {
-      this.logger.error
-('failed-dump-content', {
+      this.logger.error('failed-dump-content', {
         error,
       });
     }
@@ -873,8 +913,7 @@ class PuppeteerBot2a {
         });
       }
     } catch (error) {
-      this.logger.error
-('failed-dump-screenshot', {
+      this.logger.error('failed-dump-screenshot', {
         error,
       });
     }
@@ -903,11 +942,8 @@ class PuppeteerBot2a {
     }
 
     await this.startBrowser();
+    await this.initSpamBlocker();
     await this.startHealthCheck();
-
-    if (process.env.NODE_ENV !== 'production') {
-      await this.check();
-    }
   }
 
   async deinit() {
@@ -915,20 +951,33 @@ class PuppeteerBot2a {
       await this.stopBrowser();
       await this.stopHealthCheck();
     } catch (error) {
-      this.logger.error
-('deinit-error', {
+      this.logger.error('deinit-error', {
         error,
       });
     }
   }
+
 
   async fetchURLCache(req) {
     this.logger.info('redis-url-cache-miss', {
       url: req.url,
     });
 
+    let proxy;
+    if (this.urlCacheUseProxy) {
+      try {
+        proxy = await utils.getHTTPProxy();
+      } catch (error) {
+        this.logger.error('redis-url-cache-proxy-error', {
+          error,
+          url: req.url,
+        });
+      }
+    }
+
     const response = await fetchURLResponse({
       req,
+      proxy,
       bot: this,
     });
 
@@ -937,8 +986,7 @@ class PuppeteerBot2a {
     // prevent block
     redis.multi().hset(key, field, response).expire(key, 60 * 60 * 6).exec((error) => {
       if (error) {
-        this.logger.error
-('redis-url-cache-store-error', {
+        this.logger.error('redis-url-cache-store-error', {
           error,
           url: req.url,
         });
@@ -963,8 +1011,7 @@ class PuppeteerBot2a {
       parsed.body = Buffer.from(parsed.body, 'base64');
       return parsed;
     } catch (error) {
-      this.logger.error
-('redis-url-cache-error', {
+      this.logger.error('redis-url-cache-error', {
         error,
         url: req.url,
       });
@@ -1042,24 +1089,6 @@ class PuppeteerBot2a {
     throw timeoutError;
   }
 
-
-  async check() {
-    await this.goto('https://antoinevastel.com/bots/');
-    await this.debugCapture('detects-antoinevastel');
-
-    await this.goto('https://arh.antoinevastel.com/bots/areyouheadless');
-    await this.debugCapture('detects-areyouheadless');
-
-    await this.goto('http://device.4seeresults.com/');
-    await this.debugCapture('detects-4seeresults');
-  }
-
-  async debugCapture(key = uuid.v4()) {
-    if (!this.userId || !process.env.NODE_ENV === 'production') return;
-
-    return this.page.screenshot({ path: `/tmp/ss_${key}_${Date.now()}.png`, fullPage: true });
-  }
-
   async goto(u) {
     await this.page.goto(u);
     this.incompleteRequests = [];
@@ -1111,15 +1140,14 @@ class PuppeteerBot2a {
     }
   }
 
-  async captureToFirebase(name) {
+  async captureToS3(name) {
     try {
       await Promise.all([
         (async () => this.uploadToFirebase('text/html', `${name}-${Date.now()}.html`, await this.page.content()))(),
         (async () => this.uploadToFirebase('image/png', `${Date.now()}-${name}.png`, await this.page.screenshot({ fullPage: true })))(),
       ]);
     } catch (error) {
-      this.logger.error
-('error-captureToFirebase', {
+      this.logger.error('error-captureToFirebase', {
         error,
       });
     }
@@ -1140,24 +1168,7 @@ class PuppeteerBot2a {
       const file = bucket.file(dest);
       await file.save(Body, options);
     } catch (error) {
-      this.logger.error
-('firebaseUpload', {
-        error,
-      });
-    }
-  }
-
-  async captureToS3(name) {
-    try {
-      await Promise.all([
-        (async () => this.uploadToS3('text/html', `${Date.now()}-${name}.html`, await this.page.content()))(),
-        (async () => this.uploadToS3('image/png', `${name}-${Date.now()}.png`, await this.page.screenshot({
-          fullPage: true,
-        })))(),
-      ]);
-    } catch (error) {
-      this.logger.error
-('captureToS3', {
+      this.logger.error('firebaseUpload', {
         error,
       });
     }
@@ -1173,8 +1184,7 @@ class PuppeteerBot2a {
         Key: [process.env.NODE_ENV === 'production' ? 'prod' : 'dev', `${this.userId}/${filename}`].join('/'),
       }).promise();
     } catch (error) {
-      this.logger.error
-('s3Upload', {
+      this.logger.error('s3Upload', {
         error,
       });
     }
@@ -1271,6 +1281,7 @@ class PuppeteerBot2a {
 
     return promise;
   }
+
 
   async $fill(q, opt) {
     return this.$$fill(q, opt);
@@ -1572,14 +1583,28 @@ class PuppeteerBot2a {
   }
 
 
+  async waitForSelector(opt) {
+    return this.page.waitForSelector(opt);
+  }
+
+
+  async startHealthCheck() {
+    if (this.healthCheckTimeout) return;
+
+    this.healthCheckStartedAt = Date.now();
+    this.healthCheckTimeout = setTimeout(async () => {
+      await this.healthCheckRepeater();
+    }, 1000);
+  }
+
+
   async healthCheckRepeater() {
     try {
       if (!await this.healthCheck()) {
         await this.stopBrowser();
       }
     } catch (error) {
-      this.logger.error
-('health-check-repeater-error', await this.dump({
+      this.logger.error('health-check-repeater-error', await this.dump({
         error,
       }));
     } finally {
@@ -1595,16 +1620,14 @@ class PuppeteerBot2a {
     this.healthCheckStartedAt = this.healthCheckStartedAt || Date.now();
 
     if (Date.now() - this.healthCheckStartedAt > this.browserTimeout) {
-      this.logger.error
-('health-check-failed-browser-timeout', await this.dump());
+      this.logger.error('health-check-failed-browser-timeout', await this.dump());
       return false;
     }
 
     try {
       if (this.interaction && this.interaction.isUp) {
         if (!await this.interaction.checkValid()) {
-          this.logger.error
-('health-check-failed-interaction-invalid', await this.dump());
+          this.logger.error('health-check-failed-interaction-invalid', await this.dump());
           return false;
         }
       }
@@ -1672,8 +1695,7 @@ class PuppeteerBot2a {
         this.logger.verbose(`fingerprint-maxmind-geoip-region-${region}`);
         this.logger.verbose(`fingerprint-maxmind-geoip-ip-range-${range}`);
       } catch (error) {
-        this.logger.error
-(`maxmind-lookup-error-${Buffer.from(error.message).toString('base64')}`, {
+        this.logger.error(`maxmind-lookup-error-${Buffer.from(error.message).toString('base64')}`, {
           error,
         });
       }
@@ -1684,8 +1706,7 @@ class PuppeteerBot2a {
       if (/Session closed\. Most likely the page has been closed/.test(error.message)) return;
       if (/Protocol error \(Runtime\.callFunctionOn\): Target closed/.test(error.message)) return;
       if (/Session error \(Runtime\.callFunctionOn\): Message timed out/.test(error.message)) return;
-      this.logger.error
-(`page-error-${Buffer.from(error.message).toString('base64')}`, {
+      this.logger.error(`page-error-${Buffer.from(error.message).toString('base64')}`, {
         error,
       });
     };
@@ -1720,9 +1741,12 @@ class PuppeteerBot2a {
 
 
       if (this.executablePath) options.executablePath = this.executablePath;
+      // this.firefox ? this.browserless : await firefox.launch(options);
       this.browser = this.browserless ? await puppeteer.connect({ browserWSEndpoint: `wss://chrome.browserless.io/?token=${process.env.BROWSERLESS_KEY}` }) : await puppeteer.launch(options);
 
-      this.browser.on('error', () => errorListener);
+
+      // eslint-disable-next-line no-return-assign
+      this.browser.on('disconnected', () => this.browser = null);
 
       const version = await this.browser.version();
       this.logger.info(`puppeteer-current-chromium-revision:${version}`);
@@ -1796,8 +1820,7 @@ class PuppeteerBot2a {
         }
 
         // eslint-disable-next-line no-underscore-dangle
-        this.logger.error
-(`request-failed-${interceptedReq._failureText}-${host}`, {
+        this.logger.error(`request-failed-${interceptedReq._failureText}-${host}`, {
           skipList: true,
         });
       });
@@ -1894,8 +1917,7 @@ class PuppeteerBot2a {
         await this.page.close();
       }
     } catch (error) {
-      this.logger.error
-('failed-page-close', await this.dump({
+      this.logger.error('failed-page-close', await this.dump({
         error,
       }));
     } finally {
@@ -1907,8 +1929,7 @@ class PuppeteerBot2a {
         await this.browser.close();
       }
     } catch (error) {
-      this.logger.error
-('failed-browser-close', await this.dump({
+      this.logger.error('failed-browser-close', await this.dump({
         error,
       }));
     } finally {
@@ -1921,8 +1942,7 @@ class PuppeteerBot2a {
           this.cleanUps[i]();
         } catch (error) {
           // eslint-disable-next-line no-await-in-loop
-          this.logger.error
-('failed-call-cleanUp', await this.dump({
+          this.logger.error('failed-call-cleanUp', await this.dump({
             error,
           }));
         } finally {
@@ -2003,8 +2023,7 @@ class PuppeteerBot2a {
         try {
           await this.page.setCookie(cookie);
         } catch (error) {
-          this.logger.error
-('failed-setting-cookie', await this.dump({
+          this.logger.error('failed-setting-cookie', await this.dump({
             cookie,
           }));
         }
@@ -2049,8 +2068,7 @@ class PuppeteerBot2a {
 
       return buf;
     } catch (error) {
-      this.logger.error
-('error-getChromeUserData', {
+      this.logger.error('error-getChromeUserData', {
         error,
       });
       return Buffer.from('');
