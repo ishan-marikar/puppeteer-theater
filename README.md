@@ -71,17 +71,19 @@ The `Scene.Extensions` portion could be made way more powerful and I welcome PRs
 Read the docs for a detailed description of the whole API.
 
 ### Fully Compatible with both puppeteer@1.18.1 & puppeteer-firefox@0.5.0.
-References that are useful when reading this and any puppeteer code:
 
--  [Puppeteer docs] (https://pptr.dev/)
- - [MDN docs] (https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+## Resources
+
+-  [Puppeteer docs](https://pptr.dev/)
+ - [MDN docs](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+ - [intoli](https://intoli.com/): Great web scraping/crawling resources, from pros.
 
 
 ### WTF is this repo?
 The repo is just a basic RESTful API for you to execute bots and understand how the framework operates internally. To that end, you'll want to make sure to:
 `export DEBUG=theater*`
 
-Just do it.
+Doing so will enable verbose output that may look pretty and also provide an easy way to monitor execution.
 
 ### How to just rip and run?
 
@@ -105,8 +107,28 @@ curl --request POST \
 }
 ```
 
-Browser will launch, console output will show theater inner workings.
-# # Base Classes
+The above will execute the paypal-signin bot, included as an example.
+
+# Base Classes
+
+## class: PuppeteerBot
+- Extends puppeteer functionality to ensure proper emulation of human behavior and provides convenience methods around the default API.
+
+- Example: `clickElementHandle()`:
+
+This function will:
+
+1. Determine if the element is visible
+2. Scroll, Hover to the element's PromiseCondition
+3. Calculate a random offset from the element coordinates
+4. Move the mouse with a random delay to the `document.elementFromPoint()` position.
+5. Invoke mouse down.
+
+- Example: `exportCredential()`:
+
+This function will:
+- Export a base64 string that can be imported to restore the browser's state (cookies, session data, etc).
+
 
 ## class: Show
 
@@ -182,12 +204,13 @@ If no `TargetScene` specified, this method will returns matching `Scene`.
 
 
 
-###  show.play()
+###  show.play({ InitialScene, UntilScene })
 
 - returns: <[Promise]>
 
 
 This method will play the show. Iterating through out all the `Scenes` and `play()`ing those with `match()`es.
+Optionally, provide a specific start and end scene to customize this behavior.
 
 ##  class: Scene
 
@@ -248,6 +271,8 @@ returns `contextVariable[key]`
   ### scene.interaction()
   - returns: <[Interaction]>
 
+  Interaction is basically a fast, reliable means to provide information to the bot as it is running. Very useful for use-cases that require user input (such as to link a account).
+
 ###  scene.setContext(key, value)
 
 - `key` <[string]>
@@ -288,7 +313,9 @@ Check if `scene` finished playing; curtain fallen:
 
 - returns: <[Promise]>
 
-By default, this method will only call `extensions[].play()`. This is sort of confusing because it means if you are performing some work that needs to precede logic in `play()`, you need to  be invoking the constructor `await super.play()`  before you do your thing. Perfect example (found in the example shows) is captcha authentication. See the Docs.MD file for a detailed and complete reference.
+By default, this method will only call `extensions[].play()`.
+
+This is sort of confusing because it means if you are performing some work that needs to precede logic in `play()`, you need to  be invoking the constructor `await super.play()`  before you do your thing. Perfect example (found in the example shows) is captcha authentication. See the Docs.MD file for a detailed and complete reference.
 
 
 
@@ -304,15 +331,15 @@ This basically encapsulates the state of the page. Is this popup blocking the vi
 ```js
 query = {
   visibility: 'required'|'required:group-name'|'optional'|'forbidden',
+  shouldIncludeInvisible: true|false (optional),
   selector: '',
   visibilityAreaCheck: true|false,
 }
 ```
 
 This object (**elementQueries**) will be unique to a particular scene, when the scene is constructed it will target the results and map them into PuppeteerBotElement(s).
-
-- Don't mispell anything - your code will failure and you will spend hours tracking down the visblity that blocked you from proceeding.
-
+The core logic behind this can be found in the wrapper class, `$$` function.
+#
 
 
 - If `visibility` is `'required'`, element will only match if that target element is visible. (Default)
@@ -364,7 +391,7 @@ This object (**elementQueries**) will be unique to a particular scene, when the 
 
 ####  element.$select(opt)
 
-- `opt` will be passed to puppeteer-bot internally (dirty-select).
+- `opt` will be passed to puppeteer-bot internally (dirty-select). Clicks element, types query, presses Enter.
 
 - returns: <[Promise]<[boolean]>> whether element has been selected or not.
 
@@ -391,13 +418,15 @@ This object (**elementQueries**) will be unique to a particular scene, when the 
 
 ####  element.upload(file, opt  = {})
 
-- Writes file to temporary directory on disk, uploads file on given elements inside this PuppeteerBotElement, cleans up.
+- Writes file to temporary directory on disk, uploads file on given elements inside this PuppeteerBotElement, cleans up temporary file contents.
+- Supports `fileChooser` API released in the last version change in puppeteer.
+
 - returns: <[Promise]<[boolean]>> whether file uploaded or not.
 
 ####  element.tableContent(opts)
 
 - returns table as an array of JSON objects (`good` for scraping)
-- params: opts `{}` default arguments for tabletojson (refer to the documentation for this package)
+- params: Supports all arguments from [tabletojson](https://npmjs.com/tabletojson/) (refer to the documentation for this package)
 
 ####  element.eval(fn, ...args)
 
@@ -523,7 +552,7 @@ class TestScene2 extends Scene {
 ### new  Scene.Extensions.Delay(ms)
 
 -  `ms`  <[number]>  Giving a delay for  `ms` (ms). If `ms` left empty, value will be a random `number` between 2000-7500.
-
+- Can improve antidetection by evading heuristic markers (ie. abnormal typing, mouse movements);
 
 ##  class: Scene.Extensions.Fork
 
@@ -571,7 +600,8 @@ However, if  all `Scene`s' curtain have fallen (show is over), this extension's 
 
  ### new Scene.Extension.Captcha(targetElementName, targetAnswerElementName)
 
-- `targetElementName` is element name of captcha image to solve, `targetAnswerElementName` is element name of captcha solution input field. This extension will solve the captcha and `fill` the solution into targetAnswerElementName. This extension will decide whether to: screenshot element on DOM, get `src` attribute containing base64 image, or  use `rp` to get image from url.
+- `targetElementName` is element name of captcha image to solve
+- `targetAnswerElementName` is element name of captcha solution input field. This extension will solve the captcha and `fill` the solution into targetAnswerElementName.
 
 ##  class: Scene.Extensions.ReCAPTCHAv2
 
@@ -650,7 +680,7 @@ These scenes are:
    closing annoying modals, CTAs, extending session, etc
 
  - SpinnerAwareScene: (will wait for any spinners/loading modals to
-   dissapear before continuing to`play()` the Show.
+   dissapear before continuing to `play()` the Show.
 
 You can find some real-examples of this in the `classes/theater/shows` folder.
 
@@ -669,6 +699,9 @@ This is my first real open-source project that I'll be maintaining, I'd love con
 [https://webscrapers.slack.com](https://webscrapers.slack.com/) for a prompt response, message me here!
 
 [https://keybase.io/nicomee](https://keybase.io/nicomee)
+
+[website](https://nicomee.com)
+
 <!--stackedit_data:
 eyJoaXN0b3J5IjpbOTU1OTI2NTkzLDEwNjIwNzMwMjksNTgwNT
 YyMzk5LDE5MDE4MjE1ODEsLTE5ODg3MTEzMTgsLTgxMDQzMzYz
